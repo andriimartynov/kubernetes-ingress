@@ -194,15 +194,8 @@ RUN ./configure \
 	make modules
 
 
-############################################# Build image for Trace downloader #############################################
-FROM debian AS tracer-downloader
-
-ARG JAEGER_VERSION=v0.4.2
-
-RUN apt-get update \
-	&& apt-get install --no-install-recommends --no-install-suggests -y ca-certificates apt-transport-https wget \
-	&& wget -nv https://github.com/jaegertracing/jaeger-client-cpp/releases/download/${JAEGER_VERSION}/libjaegertracing_plugin.linux_amd64.so -O /usr/local/lib/libjaegertracing_plugin.so
-
+############################################# Base image containing libs for Opentracing #############################################
+FROM opentracing/nginx-opentracing:0.20.0 as opentracing-lib
 
 ############################################# Build image for Opentracing #############################################
 FROM debian as opentracing
@@ -210,9 +203,9 @@ ARG OPENTRACING_VERSION=1.6.0
 
 COPY --from=opentracing-builder /nginx-${NGINX_VERSION}/objs/ngx_http_opentracing_module.so /usr/lib/nginx/modules/ngx_http_opentracing_module.so
 COPY --from=opentracing-builder /usr/local/lib/libopentracing.so.${OPENTRACING_VERSION} /usr/local/lib/libopentracing.so.1
-COPY --from=tracer-downloader /usr/local/lib/libjaegertracing_plugin.so /usr/local/lib/libjaegertracing_plugin.so
 
-RUN ldconfig
+RUN --mount=type=bind,from=opentracing-lib,target=/tmp/ cp -av /tmp/usr/local/lib/libjaegertracing*so* /tmp/usr/local/lib/libzipkin*so* /tmp/usr/local/lib/libdd*so* /tmp/usr/local/lib/libyaml*so* /usr/local/lib/ \
+	&& ldconfig
 
 
 ############################################# Build image for Opentracing with NGINX Plus #############################################
